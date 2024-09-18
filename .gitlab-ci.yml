@@ -1,0 +1,59 @@
+services:
+  - docker:dind
+
+stages:
+  - build
+
+variables:
+  IMAGE_NAME: $CI_REGISTRY_IMAGE
+
+build:
+  stage: build
+  retry: 1
+  image: docker:20
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    # Determine the tag based on the Git reference
+    - |
+      if [[ "$CI_COMMIT_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        MAIN_TAG=${CI_COMMIT_REF_NAME}
+        ADDITIONAL_TAG_1="latest"
+        ADDITIONAL_TAG_2="stable"
+      elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+        MAIN_TAG="rc"
+      elif [ "$CI_COMMIT_REF_NAME" == "development" ]; then
+        MAIN_TAG="development"
+      else
+        MAIN_TAG=${CI_COMMIT_REF_NAME}
+      fi
+
+    # Pull the latest image if it exists for caching purposes
+    - docker pull $IMAGE_NAME:$MAIN_TAG || true
+
+    # Build the Docker image with the main tag
+    - >
+      docker build
+      --pull
+      --cache-from $IMAGE_NAME:$MAIN_TAG
+      --tag $IMAGE_NAME:$MAIN_TAG
+      .
+
+    # Push main tag
+    - docker push $IMAGE_NAME:$MAIN_TAG
+
+    # Additional tags
+    - |
+      if [ -n "$ADDITIONAL_TAG_1" ]; then
+        docker tag $IMAGE_NAME:$MAIN_TAG $IMAGE_NAME:$ADDITIONAL_TAG_1
+        docker push $IMAGE_NAME:$ADDITIONAL_TAG_1
+      fi
+    - |
+      if [ -n "$ADDITIONAL_TAG_2" ]; then
+        docker tag $IMAGE_NAME:$MAIN_TAG $IMAGE_NAME:$ADDITIONAL_TAG_2
+        docker push $IMAGE_NAME:$ADDITIONAL_TAG_2  # Corrected the typo here
+      fi
+
+  rules:
+    # Only run for tags and specific branches
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_REF_NAME == "development"'

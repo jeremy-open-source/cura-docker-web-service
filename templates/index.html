@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cura Docker Web Service</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #tab-container {
+            display: flex;
+            overflow-x: auto;
+            border-bottom: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f1f1f1;
+        }
+        .tab {
+            margin-right: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            cursor: pointer;
+        }
+        .tab.control {
+            background: none;
+            border: none;
+        }
+        .tab.active {
+            background-color: #e1e1e1;
+        }
+        .tab button {
+            margin-left: 10px;
+            background-color: red;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #cura-tabs {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .tab-content {
+            margin: 5px 0 5px 0;
+            border: 1px solid #ccc;
+            width: 80%;
+        }
+        #drag-drop-area {
+            padding-top: 20px;
+            width: 100%;
+            height: 100px;
+            border: 2px dashed #ccc;
+            text-align: center;
+            line-height: 100px;
+            color: #999;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            background-color: #f9f9f9;
+            z-index: 1000;
+        }
+        #new-tab-button {
+            cursor: pointer;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<div id="tab-container">
+    <div class="tab control">
+        <button id="new-tab-button">New Tab Without File</button>
+    </div>
+</div>
+<div id="cura-tabs"></div>
+<div id="drag-drop-area">Drag your file here</div>
+
+<script>
+    const hostname = "{{ hostname }}";
+    const width = parseInt("{{ resolution_x }}");
+    const height = parseInt("{{ resolution_y }}");
+
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/get_open_ports')
+            .then(response => response.json())
+            .then(data => {
+                data.ports.forEach(port => {
+                    createCuraTab(port, 0);
+                });
+            });
+    });
+
+    document.getElementById('new-tab-button').addEventListener('click', function() {
+        fetch('/open_cura', {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                createCuraTab(data.port);
+            });
+    });
+
+    document.getElementById('drag-drop-area').addEventListener('drop', function(event) {
+        event.preventDefault();
+        var file = event.dataTransfer.files[0];
+        var formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                createCuraTab(data.port);
+            });
+    });
+
+    document.getElementById('drag-drop-area').addEventListener('dragover', function(event) {
+        event.preventDefault();
+    });
+
+    function createCuraTab(port, delay = 3000) {
+        // Create a new tab
+        var tab = document.createElement('div');
+        tab.className = 'tab';
+        tab.innerHTML = `Port: ${port} <button onclick="closeCuraInstance(${port}, this)">[X]</button>`;
+        tab.onclick = function() {
+            setActiveTab(port);
+        };
+        document.getElementById('tab-container').appendChild(tab);
+
+        // Create a new tab content
+        var tabContent = document.createElement('div');
+        tabContent.className = 'tab-content';
+        tabContent.id = `tab-content-${port}`;
+        tabContent.style.display = 'none';
+        document.getElementById('cura-tabs').appendChild(tabContent);
+
+        // Set the newly created tab as active
+        setActiveTab(port);
+
+        // Add a delay before setting the src to allow the VNC server to start
+        setTimeout(function() {
+            tabContent.innerHTML = `<iframe src="/novnc/vnc.html?host=${hostname}&port=${port}&autoconnect=true&width=${width}&height=${height}&view_clip=true&resize=remote" width="${width}" height="${height}"></iframe>`;
+        }, delay);
+    }
+
+    function setActiveTab(port) {
+        // Deactivate all tabs and hide all tab contents
+        const tabs = document.querySelectorAll('.tab');
+        tabs.forEach(tab => tab.classList.remove('active'));
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabContents.forEach(content => content.style.display = 'none');
+
+        // Activate the selected tab and show its content
+        const selectedTab = Array.from(tabs).find(tab => tab.textContent.includes(`Port: ${port}`));
+        if (selectedTab) {
+            selectedTab.classList.add('active');
+        }
+        document.getElementById(`tab-content-${port}`).style.display = 'block';
+    }
+
+    function closeCuraInstance(port, button) {
+        fetch(`/close_instance/${port}`, {
+            method: 'POST'
+        }).then(() => {
+            const tab = button.closest('.tab');
+            const tabContent = document.getElementById(`tab-content-${port}`);
+
+            tab.remove();
+            tabContent.remove();
+
+            // Activate the first available tab if any
+            const firstTab = document.querySelector('.tab');
+            if (firstTab) {
+                const firstPort = firstTab.textContent.match(/Port: (\d+)/)[1];
+                setActiveTab(firstPort);
+            }
+        });
+    }
+</script>
+</body>
+</html>

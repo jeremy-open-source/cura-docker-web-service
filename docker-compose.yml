@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    user: "${USER_ID}:${GROUP_ID}"
+    environment:
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+      - RESOLUTION_X=${RESOLUTION_X}
+      - RESOLUTION_Y=${RESOLUTION_Y}
+    volumes:
+      - ./:/opt/app
+      - ./data/stl-files:/opt/stl-files
+      - ./data/config:/home/user/.config/cura/
+      - ./data/config-share:/home/user/.local/share/cura/
+    network_mode: "host"
