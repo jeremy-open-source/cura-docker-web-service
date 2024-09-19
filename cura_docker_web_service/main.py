@@ -9,6 +9,8 @@ import os
 import socket
 from datetime import datetime
 
+from starlette.responses import FileResponse
+
 root_dir = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + "/..")
 
 # Environment variables for directory paths
@@ -138,6 +140,10 @@ async def start_cura(port: int, file_path: str = None):
 
 async def close_cura(port: int):
     await cura_instances.terminate_instance(port)
+
+@app.get("/LICENSE")
+async def get_vnc_html():
+    return FileResponse(f"{root_dir}/LICENSE")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
