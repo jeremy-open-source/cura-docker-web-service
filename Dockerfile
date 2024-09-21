@@ -159,6 +159,9 @@ RUN     mkdir -p $XDG_RUNTIME_DIR \
 WORKDIR /opt/app
 
 # Copy the application code
-COPY cura_docker_web_service templates LICENSE README.md /opt/app/
+ADD cura_docker_web_service /opt/app/cura_docker_web_service
+ADD templates /opt/app/templates
+ADD LICENSE .
+ADD README.md .
 
 CMD ["python3", "-m", "cura_docker_web_service.main"]
